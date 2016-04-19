@@ -1,0 +1,262 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": "South Central US",
+            "allowedValues": [
+                "West US",
+                "East US",
+				"East US 2",
+                "West Europe",
+                "East Asia",
+                "Southeast Asia",
+				"Central US",
+				"South Central US"
+            ],
+            "metadata": {
+                "description": "Location of resources"
+            }
+        },
+        "vmName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the VM"
+            }
+        },
+        "newStorageAccountName": {
+            "type": "string",
+            "metadata": {
+                "description": "Storage Account Name"
+            }
+        },
+        "storageAccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "metadata": {
+                "description": "Type of the Storage Account"
+            }
+        },
+        "vmSize": {
+            "type": "string",
+            "defaultValue": "Standard_D2",
+            "metadata": {
+                "description": "Size of the VM"
+            }
+        },
+		"existingVirtualNetworkName": {
+			"type": "string",
+            "defaultValue": "SL-SCENT-Vnet",
+			"metadata": {
+				"description": "Name of the existing VNET"
+			}
+		},
+        "imageSKU": {
+            "type": "string",
+            "defaultValue": "2012-R2-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter"
+            ],
+            "metadata": {
+                "description": "Image SKU"
+            }
+        },
+		"subnetName": {
+			"type": "string",
+            "defaultValue": "Subnet2",
+			"allowedValues": [
+                "Subnet1",
+                "Subnet2",
+				"Subnet3"
+            ],
+			"metadata": {
+				"description": "Name of the subnet in the virtual network you want to use"
+			}
+		},
+		"existingVirtualNetworkResourceGroup": {
+			"type": "string",
+            "defaultValue": "SL-SCENT-Network",
+			"metadata": {
+				"description": "Name of the existing VNET resource group"
+			}
+		},
+        "modulesUrl": {
+            "type": "string",
+			"defaultValue": "https://github.com/mischi3f/prestaging/raw/master/IISandReg.ps1.zip",
+            "metadata": {
+                "description": "URL for the DSC configuration module. NOTE: Can be a Github url(raw) to the zip file"
+            }
+        },
+        "configurationFunction": {
+            "type": "string",
+            "defaultValue": "IISandReg.ps1\\IIS",
+            "metadata": {
+                "description": "DSC configuration function to call"
+            }
+        }
+    },
+    "variables": {
+		"vnetID": "[resourceId(parameters('existingVirtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks', parameters('existingVirtualNetworkName'))]",
+		"subnetRef": "[concat(variables('vnetID'),'/subnets/', parameters('subnetName'))]",
+        "publicIPAddressType": "Dynamic",
+        "publicIPAddressName": "[parameters('vmName')]",
+        "nicName": "[parameters('vmName')]",
+        "imagePublisher": "MicrosoftWindowsServer",
+        "imageOffer": "WindowsServer",
+        "vmExtensionName": "dscExtension",
+		"adminUsername": "servlinkadmin",
+		"adminPassword": "SL4@ct$2016in@zUr3",
+		"adDomainName": "myservice.link",
+		"adUserName": "acts@myservice.link",
+		"adPassword": "@ct$2015",
+		"tagname": "Production"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[parameters('newStorageAccountName')]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[parameters('location')]",
+			"tags": {
+				"ServiceLink": "[variables('tagname')]"
+			},
+            "properties": {
+                "accountType": "[parameters('storageAccountType')]"
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('publicIPAddressName')]",
+            "location": "[parameters('location')]",
+			"tags": {
+				"ServiceLink": "[variables('tagname')]"
+			},
+            "properties": {
+                "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[variables('nicName')]",
+            "location": "[parameters('location')]",
+			"tags": {
+				"ServiceLink": "[variables('tagname')]"
+			},
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
+                            },
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('vmName')]",
+            "location": "[parameters('location')]",
+			"tags": {
+				"ServiceLink": "[variables('tagname')]"
+			},
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', parameters('newStorageAccountName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('vmName')]",
+                    "adminUsername": "[variables('adminUsername')]",
+                    "adminPassword": "[variables('adminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('imagePublisher')]",
+                        "offer": "[variables('imageOffer')]",
+                        "sku": "[parameters('imageSKU')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "osdisk",
+                        "vhd": {
+                            "uri": "[concat('http://',parameters('newStorageAccountName'),'.blob.core.windows.net/vhds/','osdisk.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                        }
+                    ]
+                }
+            }
+        },
+		{
+		"apiVersion": "2015-05-01-preview",
+		"type": "Microsoft.Compute/virtualMachines/extensions",
+		"name": "[concat(parameters('vmName'),'/joindomain')]",
+		"location": "[parameters('location')]",
+		"dependsOn": [
+			"[concat('Microsoft.Compute/virtualMachines/', parameters ('vmName'))]"
+		],
+		"properties": {
+			"publisher": "Microsoft.Compute",
+			"type": "JsonADDomainExtension",
+			"typeHandlerVersion": "1.0",
+			"settings": {
+				"Name": "[variables('adDomainName')]",
+				"User": "[concat(variables('adDomainName'), '\\', variables('adUsername'))]",
+				"Restart": "true",
+				"Options": "3"
+			},
+			"protectedsettings": {
+				"Password": "[variables('adPassword')]"
+			}
+		}
+		},
+		{
+		"type": "Microsoft.Compute/virtualMachines/extensions",
+		"name": "[concat(parameters('vmName'),'/', variables('vmExtensionName'))]",
+		"apiVersion": "2015-05-01-preview",
+		"location": "[parameters('location')]",
+		"dependsOn": [
+			"[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
+		],
+		"properties": {
+			"publisher": "Microsoft.Powershell",
+			"type": "DSC",
+			"typeHandlerVersion": "2.8",
+			"settings": {
+			"ModulesUrl": "[parameters('modulesUrl')]",
+				"ConfigurationFunction": "[parameters('configurationFunction')]",
+				"Properties": {
+					"MachineName": "[parameters('vmName')]"
+				}
+			},
+			"protectedSettings": null
+			}
+		}
+    ]
+}
