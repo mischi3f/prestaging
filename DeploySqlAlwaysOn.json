@@ -177,6 +177,8 @@
         "settings": {
           "wmfVersion": "5.0",
 		  "modulesUrl": "[variables('sqlAOPrepareModulesURL')]",
+		  "clusterName":"[variables('clusterName')]",
+		  "lbAddress":"[parameters('sqlLBIPAddress')]",
           "configurationFunction": "[variables('sqlAOPrepareConfigurationFunction')]",
           "properties": {
             "domainName": "[parameters('domainName')]",
